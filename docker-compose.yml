@@ -28,20 +28,17 @@ services:
       DB_NAME: career_connect
       DB_USER: postgres
       DB_PASSWORD: postgres
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"          # reachable inside the Docker network only
     depends_on:
       db:
         condition: service_healthy
 
   frontend:
-    build:
-      context: ./frontend
-      args:
-        VITE_API_URL: http://localhost:8080
+    build: ./frontend
     container_name: cc-frontend
     ports:
-      - "5173:80"
+      - "5173:80"       # the only port exposed publicly; nginx proxies /api
     depends_on:
       - backend
 

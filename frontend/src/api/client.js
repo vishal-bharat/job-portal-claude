@@ -1,4 +1,7 @@
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+// In Docker / production the nginx container proxies /api/* to the backend,
+// so we use a relative URL ("" + "/api/..."). For `npm run dev` (no proxy)
+// override by setting VITE_API_URL=http://localhost:8080 in a .env.local file.
+const BASE_URL = import.meta.env.VITE_API_URL || '';
 
 function getToken() {
   return localStorage.getItem('cc_token');

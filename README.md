@@ -31,8 +31,8 @@ That command builds three images and starts three containers:
 | Container     | Image base                       | Host port | What it is               |
 |---------------|----------------------------------|-----------|--------------------------|
 | `cc-db`       | postgres:16-alpine               | 5432      | PostgreSQL database      |
-| `cc-backend`  | maven build → eclipse-temurin:17 | 8080      | Spring Boot REST API     |
-| `cc-frontend` | node build → nginx:1.27-alpine   | 5173      | React SPA (served by nginx) |
+| `cc-backend`  | maven build → eclipse-temurin:17 | —         | Spring Boot REST API (internal only; nginx proxies to it) |
+| `cc-frontend` | node build → nginx:1.27-alpine   | 5173      | React SPA + `/api` proxy |
 
 Then open **http://localhost:5173** and log in:
 
@@ -42,6 +42,15 @@ Then open **http://localhost:5173** and log in:
 The first build takes a few minutes (Maven downloads dependencies, Vite builds React). Subsequent runs are fast.
 
 To stop: `Ctrl+C`, then `docker compose down`. To wipe the database too: `docker compose down -v`.
+
+### Deploying to a VPS
+
+The same `docker compose up --build -d` works on a VPS. The frontend nginx proxies `/api/*` to the backend over the internal Docker network, so the React bundle never needs to know the public address — it just works on `localhost`, on `http://YOUR_VPS_IP:5173`, or behind a domain.
+
+Two practical notes:
+
+1. **Open port 5173 in your firewall.** On Ubuntu: `sudo ufw allow 5173/tcp`. Or remap the published port to 80 in `docker-compose.yml` (`"80:80"` instead of `"5173:80"`) so users can visit `http://YOUR_DOMAIN` without a port.
+2. **Backend port is intentionally not published.** It listens on the internal Docker network only. To call the API from outside, go through nginx: `curl http://YOUR_VPS_IP:5173/api/jobs/recommended`.
 
 ---
 

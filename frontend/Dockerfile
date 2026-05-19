@@ -2,10 +2,8 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 
-# Allow the API URL to be set at build time
-ARG VITE_API_URL=http://localhost:8080
-ENV VITE_API_URL=$VITE_API_URL
-
+# The frontend talks to /api/* (same-origin); nginx proxies that to the
+# backend container, so no API URL needs to be baked into the bundle.
 COPY package.json ./
 # package-lock is optional; use install (not ci) so first build works without one
 RUN npm install --no-audit --no-fund
