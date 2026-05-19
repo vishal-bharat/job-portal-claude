@@ -1,0 +1,49 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: cc-db
+    environment:
+      POSTGRES_DB: career_connect
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - cc-db-data:/var/lib/postgresql/data
+    healthcheck:
+      # Run a real query so we only report healthy once the DB truly accepts SQL,
+      # not just when the postmaster has started listening.
+      test: ["CMD-SHELL", "pg_isready -U postgres -d career_connect && psql -U postgres -d career_connect -c 'SELECT 1' >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+  backend:
+    build: ./backend
+    container_name: cc-backend
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: career_connect
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: http://localhost:8080
+    container_name: cc-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  cc-db-data:
