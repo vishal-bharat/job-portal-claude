@@ -139,13 +139,35 @@ frontend/
 
 ## How match % is calculated
 
-For each job, the score is simply:
+The recommender uses **content-based filtering**: each job and each student is
+turned into a **TF-IDF weighted skill vector**, and jobs are ranked by **cosine
+similarity** to the student.
 
-```
-matchPercent = (# of required skills the student has) / (total required skills) * 100
-```
+1. **IDF (inverse document frequency)** — jobs are treated as "documents" and
+   their required skills as "terms". A skill required by few jobs gets a high
+   weight; a skill required by almost every job gets a low weight:
 
-Jobs are returned sorted by match % descending. The calculation runs on every request, so adding or removing a skill instantly updates the recommendations.
+   ```
+   idf(skill) = ln( (1 + N) / (1 + df) ) + 1
+   ```
+
+   where `N` = number of jobs and `df` = jobs requiring that skill. So matching
+   a rare skill like *Kubernetes* counts for more than matching *SQL*.
+
+2. **Cosine similarity** — the student vector and each job vector are compared:
+
+   ```
+   cosine = dot(student, job) / ( ||student|| * ||job|| )
+   matchPercent = round(cosine * 100)
+   ```
+
+   Normalising by vector length means a job is not penalised just for listing
+   many skills.
+
+This is a non-parametric, instance-based method — there is no training step.
+Scores are recomputed on every request, so adding or removing a skill instantly
+updates the recommendations. Jobs are returned sorted by match % descending.
+The logic lives in `JobRecommendationService`.
 
 ---
 
