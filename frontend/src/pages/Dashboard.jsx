@@ -19,10 +19,24 @@ const TRENDING = [
   { role: 'Cybersecurity Analyst', openings: '670 openings', change: '+41%' },
 ];
 
+// Normalise a raw job object from the Python backend (snake_case → camelCase)
+function normaliseJob(job) {
+  return {
+    ...job,
+    matchPercent:   job.match_percent   ?? job.matchPercent   ?? 0,
+    requiredSkills: job.required_skills ?? job.requiredSkills ?? [],
+    missingSkills:  job.missing_skills  ?? job.missingSkills  ?? [],
+    semanticBoost:  job.semantic_boost  ?? job.semanticBoost  ?? false,
+    postedDate:     job.posted_date     ?? job.postedDate,
+    jobType:        job.job_type        ?? job.jobType,
+  };
+}
+
 export default function Dashboard() {
   const [profile, setProfile] = useState(null);
   const [allSkills, setAllSkills] = useState([]);
   const [jobs, setJobs] = useState([]);
+  const [skillGap, setSkillGap] = useState(null);   // { top_missing, learning_path }
   const [filter, setFilter] = useState('all');
   const [newSkill, setNewSkill] = useState('');
   const [error, setError] = useState('');
@@ -31,14 +45,16 @@ export default function Dashboard() {
   const refresh = async (currentFilter = filter) => {
     setError('');
     try {
-      const [p, s, j] = await Promise.all([
+      const [p, s, j, gap] = await Promise.all([
         api.getProfile(),
         api.allSkills(),
-        api.recommendedJobs(currentFilter)
+        api.recommendedJobs(currentFilter),
+        api.skillGap(),
       ]);
       setProfile(p);
       setAllSkills(s);
-      setJobs(j);
+      setJobs(j.map(normaliseJob));
+      setSkillGap(gap);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -69,7 +85,7 @@ export default function Dashboard() {
     refresh(key);
   };
 
-  // jobs-per-skill stat shown in top-right
+  // Per-skill: how many jobs require it
   const skillStats = useMemo(() => {
     if (!profile) return [];
     return profile.skills.map((s) => ({
@@ -78,27 +94,17 @@ export default function Dashboard() {
     }));
   }, [profile, jobs]);
 
-  // skills the student doesn't have yet
+  // Suggested skills the student doesn't have yet
   const suggested = useMemo(() => {
     if (!profile) return [];
     return allSkills.filter((s) => !profile.skills.includes(s)).slice(0, 10);
   }, [allSkills, profile]);
 
-  // "Learn to Boost Matches": missing skills ranked by how many jobs they'd unlock
-  const boostList = useMemo(() => {
-    if (!profile) return [];
-    const have = new Set(profile.skills.map(s => s.toLowerCase()));
-    const counts = {};
-    jobs.forEach(j => j.requiredSkills.forEach(rs => {
-      if (!have.has(rs.toLowerCase())) {
-        counts[rs] = (counts[rs] || 0) + 1;
-      }
-    }));
-    return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 4)
-      .map(([name, n]) => ({ name, n }));
-  }, [profile, jobs]);
+  // Count BERT-boosted jobs for the banner
+  const semanticBoostCount = useMemo(
+    () => jobs.filter(j => j.semanticBoost).length,
+    [jobs]
+  );
 
   if (loading) return <div className="app"><Sidebar /><div className="main"><p>Loading…</p></div></div>;
 
@@ -110,6 +116,19 @@ export default function Dashboard() {
           <h1 className="page-title">Opportunities</h1>
 
           {error && <div className="error">{error}</div>}
+
+          {/* BERT info banner */}
+          {semanticBoostCount > 0 && (
+            <div style={{
+              background: '#eff6ff', border: '1px solid #bfdbfe',
+              borderRadius: 8, padding: '8px 14px', marginBottom: 12,
+              fontSize: 13, color: '#1d4ed8'
+            }}>
+              🧠 <strong>BERT semantic matching</strong> found {semanticBoostCount} extra job
+              {semanticBoostCount > 1 ? 's' : ''} you may not have matched with keyword search alone.
+              Look for the <span style={{ background: '#e0f2fe', padding: '1px 5px', borderRadius: 4 }}>BERT match</span> badge.
+            </div>
+          )}
 
           {/* Skills card */}
           <div className="card">
@@ -129,7 +148,9 @@ export default function Dashboard() {
                   {s} <span className="x" onClick={() => handleRemoveSkill(s)} title="Remove">×</span>
                 </span>
               ))}
-              {profile.skills.length === 0 && <div style={{ fontSize: 13, color: '#6b7494' }}>Add a skill to start seeing matched opportunities.</div>}
+              {profile.skills.length === 0 && (
+                <div style={{ fontSize: 13, color: '#6b7494' }}>Add a skill to start seeing matched opportunities.</div>
+              )}
             </div>
 
             <div className="suggested-label">SUGGESTED SKILLS</div>
@@ -193,16 +214,41 @@ export default function Dashboard() {
             ))}
           </div>
 
+          {/* Skill Gap card — powered by the backend's greedy set-cover algorithm */}
           <div className="card">
-            <h2 className="section-title">🎓 Learn to Boost Matches</h2>
-            <div style={{ fontSize: 12, color: '#6b7494', marginBottom: 8 }}>Adding these skills unlocks more opportunities:</div>
-            {boostList.length === 0 && <div style={{ fontSize: 13, color: '#6b7494' }}>You're matched everywhere — nice!</div>}
-            {boostList.map((b) => (
-              <div key={b.name} className="label-row">
-                <span>{b.name}</span>
-                <span style={{ color: '#2a9d8f', fontWeight: 600 }}>+{b.n} jobs</span>
+            <h2 className="section-title">🎓 Your Skill Gap Analysis</h2>
+
+            {skillGap && skillGap.learning_path && skillGap.learning_path.length > 0 ? (
+              <>
+                <div style={{ fontSize: 12, color: '#6b7494', marginBottom: 8 }}>
+                  Recommended learning order to unlock the most jobs:
+                </div>
+                {skillGap.learning_path.map((skill, i) => {
+                  const item = skillGap.top_missing?.find(m => m.skill === skill);
+                  return (
+                    <div key={skill} className="label-row" style={{ alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{
+                          width: 20, height: 20, borderRadius: '50%',
+                          background: '#e0f2fe', color: '#0369a1',
+                          fontSize: 11, fontWeight: 700,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          flexShrink: 0
+                        }}>{i + 1}</span>
+                        <span style={{ fontWeight: 500 }}>{skill}</span>
+                      </div>
+                      <span style={{ color: '#2a9d8f', fontWeight: 600, fontSize: 12 }}>
+                        +{item?.unlocks_jobs ?? '?'} jobs
+                      </span>
+                    </div>
+                  );
+                })}
+              </>
+            ) : (
+              <div style={{ fontSize: 13, color: '#6b7494' }}>
+                You're well matched! Add more skills to unlock more opportunities.
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>

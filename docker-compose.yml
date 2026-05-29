@@ -20,7 +20,7 @@ services:
       start_period: 15s
 
   backend:
-    build: ./backend
+    build: ./python-backend
     container_name: cc-backend
     environment:
       DB_HOST: db

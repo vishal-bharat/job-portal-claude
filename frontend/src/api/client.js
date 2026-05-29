@@ -47,11 +47,12 @@ export const api = {
   getProfile: () => request('/api/profile'),
   updateProfile: (data) =>
     request('/api/profile', { method: 'PUT', body: JSON.stringify(data) }),
-  allSkills: () => request('/api/skills/all'),
+  allSkills: () => request('/api/skills'),
   addSkill: (name) =>
-    request('/api/skills/me', { method: 'POST', body: JSON.stringify({ name }) }),
+    request('/api/skills', { method: 'POST', body: JSON.stringify({ name }) }),
   removeSkill: (name) =>
-    request(`/api/skills/me/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+    request(`/api/skills/${encodeURIComponent(name)}`, { method: 'DELETE' }),
   recommendedJobs: (filter = 'all') =>
-    request(`/api/jobs/recommended?filter=${encodeURIComponent(filter)}`)
+    request(`/api/jobs/recommended?filter=${encodeURIComponent(filter)}`),
+  skillGap: () => request('/api/jobs/skill-gap'),
 };
