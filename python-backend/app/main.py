@@ -3,8 +3,12 @@ GISMA Career Connect — Python/FastAPI backend
 Recommendation engine: BERT (sentence-transformers all-MiniLM-L6-v2)
 """
 
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+logging.basicConfig(level=logging.INFO)
 
 from .database import engine, Base
 from .routers import auth, profile, skills, jobs

@@ -22,12 +22,15 @@ Add them to docker-compose.yml:
 
 from __future__ import annotations
 import time
+import logging
 from datetime import date
 from typing import Optional
 
 import httpx
 
 from ..config import settings
+
+logger = logging.getLogger(__name__)
 
 # ── In-memory cache ────────────────────────────────────────────────────────────
 _cache: dict[str, dict] = {}
@@ -71,7 +74,9 @@ def build_query(student_skills: list[str], course: Optional[str]) -> str:
 
 def _fetch_jsearch(query: str, n: int = 5) -> list[dict]:
     if not settings.jsearch_api_key:
+        logger.warning("JSearch: no API key set, skipping")
         return []
+    logger.info("JSearch: fetching query=%r", query)
     try:
         with httpx.Client(timeout=10) as client:
             resp = client.get(
@@ -82,9 +87,13 @@ def _fetch_jsearch(query: str, n: int = 5) -> list[dict]:
                     "X-RapidAPI-Host": "jsearch.p.rapidapi.com",
                 },
             )
+            logger.info("JSearch: HTTP %s", resp.status_code)
             resp.raise_for_status()
-            return [_parse_jsearch(j) for j in resp.json().get("data", [])[:n]]
-    except Exception:
+            jobs = resp.json().get("data", [])
+            logger.info("JSearch: got %d results", len(jobs))
+            return [_parse_jsearch(j) for j in jobs[:n]]
+    except Exception as exc:
+        logger.error("JSearch: failed — %s", exc)
         return []
 
 
@@ -131,7 +140,9 @@ def _parse_jsearch(j: dict) -> dict:
 
 def _fetch_adzuna(query: str, n: int = 5) -> list[dict]:
     if not settings.adzuna_app_id or not settings.adzuna_app_key:
+        logger.warning("Adzuna: no API keys set, skipping")
         return []
+    logger.info("Adzuna: fetching query=%r", query)
     try:
         with httpx.Client(timeout=10) as client:
             resp = client.get(
@@ -145,9 +156,13 @@ def _fetch_adzuna(query: str, n: int = 5) -> list[dict]:
                     "content-type": "application/json",
                 },
             )
+            logger.info("Adzuna: HTTP %s", resp.status_code)
             resp.raise_for_status()
-            return [_parse_adzuna(j) for j in resp.json().get("results", [])[:n]]
-    except Exception:
+            jobs = resp.json().get("results", [])
+            logger.info("Adzuna: got %d results", len(jobs))
+            return [_parse_adzuna(j) for j in jobs[:n]]
+    except Exception as exc:
+        logger.error("Adzuna: failed — %s", exc)
         return []
 
 
