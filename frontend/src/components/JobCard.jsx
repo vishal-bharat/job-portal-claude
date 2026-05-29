@@ -33,7 +33,8 @@ export default function JobCard({ job }) {
   const matchClass = job.matchPercent >= 50 ? '' : 'match-low';
   const missing    = job.missingSkills || [];
   const srcBadge   = SOURCE_BADGE[job.source] || SOURCE_BADGE.seed;
-  const hasApply   = !!job.applyUrl;
+  // Show apply button for any real job (linkedin/stepstone) — always has a URL
+  const hasApply   = job.source === 'linkedin' || job.source === 'stepstone';
 
   return (
     <div className="job">

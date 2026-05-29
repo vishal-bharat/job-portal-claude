@@ -130,7 +130,12 @@ def _parse_jsearch(j: dict) -> dict:
         "salary": salary,
         "posted_date": date.today(),
         "required_skills": skills,
-        "apply_url": j.get("job_apply_link") or j.get("job_google_link") or "",
+        "apply_url": (
+            j.get("job_apply_link")
+            or j.get("job_google_link")
+            # fallback: LinkedIn job search for this title + company
+            or f"https://www.linkedin.com/jobs/search/?keywords={j.get('job_title', '').replace(' ', '%20')}%20{j.get('employer_name', '').replace(' ', '%20')}"
+        ),
         "source": "linkedin",
         "description": (j.get("job_description") or "")[:600],
     }
@@ -184,7 +189,11 @@ def _parse_adzuna(j: dict) -> dict:
         "salary": salary,
         "posted_date": date.today(),
         "required_skills": [],  # extracted from description later
-        "apply_url": j.get("redirect_url", ""),
+        "apply_url": (
+            j.get("redirect_url")
+            # fallback: StepStone search for this title
+            or f"https://www.stepstone.de/jobs/{j.get('title', '').replace(' ', '-').lower()}"
+        ),
         "source": "stepstone",
         "description": (j.get("description") or "")[:600],
     }
