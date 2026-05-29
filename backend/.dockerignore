@@ -1,8 +1,0 @@
-target/
-*.iml
-.idea/
-.vscode/
-.git/
-.mvn/
-mvnw
-mvnw.cmd
