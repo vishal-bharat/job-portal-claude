@@ -1,37 +1,46 @@
 """
-BERT-based job recommendation service.
+GISMABert-based job recommendation service.
 
 How it works:
 ─────────────
-1. Load sentence-transformers model (all-MiniLM-L6-v2, ~80MB, cached after first download).
+1. Load GISMABert — a fine-tuned sentence-transformers model trained on German
+   job descriptions mapped to GISMA course profiles (Bundesagentur für Arbeit data).
+   Falls back to all-MiniLM-L6-v2 if GISMABert is not yet available.
 2. Convert each skill list into a natural-language sentence:
        ["Python", "SQL", "Docker"]  →  "Python, SQL, Docker"
 3. Encode both the student sentence and each job sentence into a 384-dim embedding vector.
 4. Compute cosine similarity between the student vector and each job vector.
 5. Scale cosine (0.0–1.0) to match percent (0–100).
 
-Why BERT beats TF-IDF here:
-────────────────────────────
-- TF-IDF: "Machine Learning" and "ML" are COMPLETELY different → 0% overlap.
-- BERT:   "Machine Learning" and "ML" are semantically close   → high similarity.
-- BERT understands that "React developer" is related to "Frontend development"
-  even if those exact words never appear in the student's skill list.
+Why GISMABert beats generic BERT here:
+───────────────────────────────────────
+- Generic BERT: trained on Wikipedia + BooksCorpus (general English text).
+- GISMABert: fine-tuned on German job market data filtered to GISMA course domains.
+  It knows that "Finanzanalyst" is closely related to "Finance & Accounting" students,
+  and that a "Scrum Master" role is a strong match for Project Management graduates.
 
 Semantic boost flag:
 ────────────────────
 We set `semantic_boost=True` when BERT gives a higher match than a plain
-exact-skill-overlap would. This lets the frontend highlight jobs where BERT
+exact-skill-overlap would. This lets the frontend highlight jobs where GISMABert
 found hidden compatibility — a key thesis differentiator vs TF-IDF.
 """
 
 from __future__ import annotations
 
+import os
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
 from ..models import Job, Student
 from ..schemas import JobResponse
 
+
+# ── Model paths ────────────────────────────────────────────────────────────────
+# GISMABert: fine-tuned on GISMA-course job data (run train_gismabert.py to produce)
+# Falls back to generic base model if GISMABert hasn't been trained yet.
+_GISMABERT_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "gismabert")
+_BASE_MODEL     = "all-MiniLM-L6-v2"
 
 # Singleton model — loaded once at startup, reused for all requests
 _model: SentenceTransformer | None = None
@@ -40,7 +49,13 @@ _model: SentenceTransformer | None = None
 def _get_model() -> SentenceTransformer:
     global _model
     if _model is None:
-        _model = SentenceTransformer("all-MiniLM-L6-v2")
+        if os.path.isdir(_GISMABERT_PATH):
+            print(f"✅ Loading GISMABert from {_GISMABERT_PATH}")
+            _model = SentenceTransformer(_GISMABERT_PATH)
+        else:
+            print(f"ℹ️  GISMABert not found — using base model ({_BASE_MODEL})")
+            print(f"   Run python-backend/collect_data.py then train_gismabert.py to train GISMABert.")
+            _model = SentenceTransformer(_BASE_MODEL)
     return _model
 
 
