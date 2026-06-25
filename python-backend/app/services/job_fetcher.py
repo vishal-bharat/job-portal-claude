@@ -80,66 +80,23 @@ def build_query(student_skills: list[str], course: Optional[str]) -> str:
 
 # ── Bundesagentur für Arbeit (German Federal Employment Agency) ───────────────
 
-# Map multi-word skills to single German-friendly keywords Arbeitsagentur accepts
-_BA_QUERY_MAP = {
-    "Machine Learning":   "Datenwissenschaft",
-    "Data Analysis":      "Datenanalyse",
-    "Data Science":       "Datenwissenschaft",
-    "Deep Learning":      "Maschinelles",
-    "REST APIs":          "Backend",
-    "Node.js":            "JavaScript",
-    "Vue.js":             "JavaScript",
-    "Power BI":           "Excel",
-    "Project Management": "Projektmanager",
-    "Computer Vision":    "Bildverarbeitung",
-    "Large Language Models": "KI",
-    "Prompt Engineering": "KI",
-    "Agentic AI":         "KI",
-    "AI Agents":          "KI",
-    "OpenAI API":         "KI",
-    "Hugging Face":       "Python",
-    "Vector Database":    "Datenbank",
-    "Spring Boot":        "Java",
-    "Next.js":            "React",
-}
-
-
-def _ba_safe_query(query: str) -> str:
-    """Convert query to a single word Arbeitsagentur will accept."""
-    return _BA_QUERY_MAP.get(query, query.split()[0])
-
-
 def _fetch_arbeitsagentur(query: str, n: int = 8) -> list[dict]:
     """
     Fetch jobs from the official German Federal Employment Agency.
-    Uses OAuth2 client-credentials flow (required by v4 API).
-    Falls back to v3 unauthenticated if token fetch fails.
+    Public API — no key needed. Single-word queries work best.
     """
-    safe_q = _ba_safe_query(query)
-    logger.info("Arbeitsagentur: fetching query=%r → %r", query, safe_q)
-
-    # ── Try OAuth2 token (v4 requirement) ──────────────────────────────────────
-    token = _get_ba_token()
-    if token:
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "User-Agent": "GISMACareerConnect/1.0",
-        }
-        url = "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4/jobs"
-    else:
-        # Fallback: v3 with API-Key header (older but still works on some regions)
-        headers = {
-            "X-API-Key":  "jobboerse-jobsuche",
-            "User-Agent": "GISMACareerConnect/1.0",
-        }
-        url = "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4/jobs"
-
+    # API only accepts single words — take first word of multi-word queries
+    safe_q = query.split()[0]
+    logger.info("Arbeitsagentur: fetching query=%r", safe_q)
     try:
         with httpx.Client(timeout=15) as client:
             resp = client.get(
-                url,
+                "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4/jobs",
                 params={"was": safe_q, "size": n, "page": 0},
-                headers=headers,
+                headers={
+                    "X-API-Key":  "jobboerse-jobsuche",
+                    "User-Agent": "GISMACareerConnect/1.0",
+                },
             )
             logger.info("Arbeitsagentur: HTTP %s", resp.status_code)
             if resp.status_code >= 400:
@@ -152,39 +109,6 @@ def _fetch_arbeitsagentur(query: str, n: int = 8) -> list[dict]:
     except Exception as exc:
         logger.error("Arbeitsagentur: failed — %s", exc)
         return []
-
-
-# BA OAuth2 token cache
-_ba_token: dict = {"token": None, "expires": 0}
-
-
-def _get_ba_token() -> str | None:
-    """Fetch a short-lived OAuth2 token from Bundesagentur (client credentials)."""
-    if _ba_token["token"] and time.time() < _ba_token["expires"]:
-        return _ba_token["token"]
-    try:
-        with httpx.Client(timeout=10) as client:
-            resp = client.post(
-                "https://rest.arbeitsagentur.de/oauth/gettoken_cc",
-                data={
-                    "client_id":     "jobboerse-jobsuche",
-                    "client_secret": "shared-secret",
-                    "grant_type":    "client_credentials",
-                },
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                _ba_token["token"]   = data.get("access_token")
-                _ba_token["expires"] = time.time() + data.get("expires_in", 3600) - 60
-                logger.info("Arbeitsagentur: OAuth token acquired")
-                return _ba_token["token"]
-            else:
-                logger.warning("Arbeitsagentur: token fetch failed %s", resp.status_code)
-                return None
-    except Exception as exc:
-        logger.warning("Arbeitsagentur: token fetch error — %s", exc)
-        return None
 
 
 def _parse_arbeitsagentur(j: dict) -> dict:
@@ -361,7 +285,8 @@ def fetch_trends_data() -> dict:
       - Top skills by frequency across all job descriptions
       - Top roles by frequency of matching job titles
 
-    Results cached for 1 hour. Returns empty lists gracefully if APIs are down.
+    Falls back to static Berlin market data if live APIs are unavailable.
+    Results cached for 1 hour.
     """
     cache_key = "trends::v1"
     entry = _cache.get(cache_key)
@@ -369,11 +294,15 @@ def fetch_trends_data() -> dict:
         logger.info("Trends cache hit")
         return entry["data"]
 
-    logger.info("Trends: fetching %d queries from Bundesagentur", len(_TREND_QUERIES))
+    logger.info("Trends: fetching %d queries from Bundesagentur + Adzuna", len(_TREND_QUERIES))
     all_jobs: list[dict] = []
     for q in _TREND_QUERIES:
-        jobs = _fetch_arbeitsagentur(q, n=10)
-        all_jobs.extend(jobs)
+        ba_jobs = _fetch_arbeitsagentur(q, n=8)
+        all_jobs.extend(ba_jobs)
+        # Also fetch from Adzuna for each category — ensures data even if BA is down
+        az_jobs = _fetch_adzuna(q, n=5)
+        all_jobs.extend(az_jobs)
+    logger.info("Trends: collected %d total jobs (BA + Adzuna)", len(all_jobs))
 
     # Count skill occurrences across all descriptions + titles
     skill_counts: dict[str, int] = {}
