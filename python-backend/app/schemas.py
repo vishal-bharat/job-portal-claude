@@ -86,6 +86,17 @@ class SkillGapResponse(BaseModel):
     """Global skill-gap analysis — which skills to learn next to unlock the most jobs."""
     top_missing: list[SkillGapItem]
     learning_path: list[str]           # ordered list: learn these first
+    approach: str = "rag"              # greedy | semantic | rag
+
+
+class CVExtractResponse(BaseModel):
+    """Result of parsing an uploaded PDF CV."""
+    all_skills: list[str]              # union of regex + semantic extraction
+    regex_skills: list[str]            # skills found by exact taxonomy match
+    semantic_skills: list[str]         # additional skills found via GISMABERT
+    total_found: int
+    cv_preview: str                    # first 2000 chars of extracted text
+    auto_added: list[str]              # skills that were added to student profile
 
 
 # Market Trends

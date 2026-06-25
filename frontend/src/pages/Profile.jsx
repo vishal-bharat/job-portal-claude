@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
 import { api, setSession, getUser } from '../api/client.js';
 
@@ -7,6 +7,13 @@ export default function Profile() {
   const [form, setForm] = useState({ name: '', university: '', course: '', year: '' });
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
+
+  // CV upload state
+  const [cvUploading, setCvUploading]   = useState(false);
+  const [cvResult, setCvResult]         = useState(null);   // CVExtractResponse
+  const [cvError, setCvError]           = useState('');
+  const [dragOver, setDragOver]         = useState(false);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     api.getProfile().then(p => {
@@ -40,6 +47,33 @@ export default function Profile() {
       const updated = await api.removeSkill(s);
       setProfile(updated);
     } catch (e) { setError(e.message); }
+  };
+
+  const handleCVUpload = async (file) => {
+    if (!file) return;
+    if (file.type !== 'application/pdf') {
+      setCvError('Please upload a PDF file.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setCvError('File too large — maximum 10 MB.');
+      return;
+    }
+    setCvUploading(true);
+    setCvError('');
+    setCvResult(null);
+    try {
+      const result = await api.extractCV(file);
+      setCvResult(result);
+      // refresh profile so the Skills card shows newly added skills
+      const updated = await api.getProfile();
+      setProfile(updated);
+    } catch (e) {
+      setCvError(e.message);
+    } finally {
+      setCvUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   if (!profile) return <div className="app"><Sidebar /><div className="main"><p>Loading…</p></div></div>;
@@ -86,6 +120,106 @@ export default function Profile() {
             <button className="btn-primary" style={{ marginTop: 16 }} onClick={save}>Save changes</button>
           </div>
 
+          {/* ── CV Upload card ─────────────────────────────────────────── */}
+          <div className="card">
+            <h2 className="section-title">📄 Upload Your CV</h2>
+            <p style={{ fontSize: 13, color: '#6b7494', marginTop: 0 }}>
+              Upload a PDF and we'll automatically extract your skills using our three-stage
+              pipeline: text extraction → taxonomy matching → GISMABERT semantic expansion.
+              Extracted skills are added to your profile instantly.
+            </p>
+
+            {/* Drop zone */}
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(false);
+                const f = e.dataTransfer.files[0];
+                if (f) handleCVUpload(f);
+              }}
+              style={{
+                border: `2px dashed ${dragOver ? '#0369a1' : '#c7d0e0'}`,
+                borderRadius: 12,
+                padding: '28px 20px',
+                textAlign: 'center',
+                cursor: 'pointer',
+                background: dragOver ? '#f0f7ff' : '#f8faff',
+                transition: 'all 0.2s',
+                marginBottom: 12,
+              }}
+            >
+              <div style={{ fontSize: 32, marginBottom: 8 }}>📂</div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: '#1e2a4a' }}>
+                {cvUploading ? 'Extracting skills…' : 'Drop your CV here or click to browse'}
+              </div>
+              <div style={{ fontSize: 12, color: '#6b7494', marginTop: 4 }}>PDF only · max 10 MB</div>
+            </div>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/pdf"
+              style={{ display: 'none' }}
+              onChange={(e) => handleCVUpload(e.target.files[0])}
+            />
+
+            {cvUploading && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                fontSize: 13, color: '#0369a1', padding: '10px 0',
+              }}>
+                <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⚙️</span>
+                Running 3-stage extraction pipeline…
+              </div>
+            )}
+
+            {cvError && (
+              <div className="error" style={{ marginTop: 8 }}>{cvError}</div>
+            )}
+
+            {cvResult && (
+              <div style={{
+                background: '#f0fdf4', border: '1px solid #86efac',
+                borderRadius: 10, padding: '14px 16px', marginTop: 8,
+              }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: '#15803d', marginBottom: 8 }}>
+                  ✅ Extraction complete — {cvResult.auto_added.length} new skill{cvResult.auto_added.length !== 1 ? 's' : ''} added
+                </div>
+                <div style={{ display: 'flex', gap: 20, fontSize: 12, color: '#6b7494', marginBottom: 10 }}>
+                  <span>📋 Regex matched: <strong>{cvResult.regex_skills?.length ?? 0}</strong></span>
+                  <span>🧠 Semantic expanded: <strong>{cvResult.semantic_skills?.length ?? 0}</strong></span>
+                  <span>🔢 Total found: <strong>{cvResult.total_found}</strong></span>
+                </div>
+                {cvResult.all_skills?.length > 0 && (
+                  <div className="chips" style={{ marginTop: 4 }}>
+                    {cvResult.all_skills.map(s => (
+                      <span key={s} className="chip" style={{ background: '#dcfce7', color: '#15803d' }}>
+                        ✓ {s}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {cvResult.cv_preview && (
+                  <details style={{ marginTop: 10 }}>
+                    <summary style={{ fontSize: 12, color: '#6b7494', cursor: 'pointer' }}>
+                      View CV text preview
+                    </summary>
+                    <pre style={{
+                      fontSize: 11, color: '#374151', background: '#fff',
+                      border: '1px solid #e1e5ee', borderRadius: 6,
+                      padding: 10, marginTop: 6, whiteSpace: 'pre-wrap',
+                      maxHeight: 160, overflow: 'auto',
+                    }}>{cvResult.cv_preview}</pre>
+                  </details>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── Skills card ────────────────────────────────────────────── */}
           <div className="card">
             <h2 className="section-title">Skills</h2>
             <div style={{ fontSize: 13, color: '#6b7494', marginBottom: 10 }}>

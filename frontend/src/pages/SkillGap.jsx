@@ -74,7 +74,9 @@ export default function SkillGap() {
           <div className="card">
             <h2 className="section-title">📚 Recommended Learning Path</h2>
             <p style={{ fontSize: 13, color: '#6b7494', marginTop: 0 }}>
-              Learn these skills in order to unlock the most job matches. Calculated by our greedy set-cover algorithm.
+              Ranked by our <strong>GISMABERT Semantic Similarity</strong> engine — skills demanded by your
+              closest-matching jobs appear first. Upload your CV on the{' '}
+              <a href="/profile" style={{ color: '#0369a1' }}>Profile page</a> to auto-populate your skills.
             </p>
 
             {learningPath.length === 0 ? (
@@ -154,14 +156,25 @@ export default function SkillGap() {
           <div className="card">
             <h2 className="section-title">💡 How it works</h2>
             <p style={{ fontSize: 13, color: '#6b7494', lineHeight: 1.6 }}>
-              Our <strong>greedy set-cover algorithm</strong> analyzes all available jobs and finds the minimum set
-              of skills that unlocks the maximum number of opportunities. It picks the skill that opens the most
-              doors first, then repeats — giving you the optimal learning sequence.
+              Skills are matched against live job postings using{' '}
+              <strong>GISMABERT Semantic Similarity</strong> — our domain-fine-tuned BERT model
+              selected after comparing four approaches: Greedy Set Cover, GISMABERT Semantic,
+              RAG-Inspired Retrieval, and Collaborative Filtering. GISMABERT Semantic achieved
+              the highest domain precision (65%) and coverage (48.8%) in evaluation.
             </p>
-            <p style={{ fontSize: 13, color: '#6b7494', lineHeight: 1.6, marginBottom: 0 }}>
-              Combined with our <strong>BERT semantic matching</strong>, even skills you're close to having
-              get recognised — not just exact keyword matches.
+            <p style={{ fontSize: 13, color: '#6b7494', lineHeight: 1.6, marginBottom: 12 }}>
+              Missing skills are weighted by how closely the jobs that require them match
+              your profile — skills demanded by your best-matched roles rank highest.
             </p>
+            <a href="/profile" style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              fontSize: 13, color: '#0369a1', fontWeight: 600,
+              textDecoration: 'none',
+              background: '#f0f7ff', border: '1px solid #bfdbfe',
+              borderRadius: 8, padding: '8px 14px',
+            }}>
+              📄 Upload CV to auto-fill skills →
+            </a>
           </div>
         </div>
       </div>

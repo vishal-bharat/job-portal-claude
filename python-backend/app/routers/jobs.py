@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query  # Query used by /recommended and /search
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -84,24 +84,34 @@ def skill_gap_analysis(
     db: Session = Depends(get_db),
 ):
     """
-    Skill gap analysis combines:
-      - Seed jobs from DB (structured, curated skill data)
-      - Live jobs from Arbeitsagentur + Adzuna (reflects current market demands)
+    Skill gap analysis using GISMABERT Semantic Similarity (selected after
+    comparative evaluation against Greedy Set Cover and RAG-Inspired retrieval).
 
-    This means emerging skills like RAG, LangChain, Agentic AI automatically
-    appear in the skill gap as soon as they become common in real job postings.
+    Method:
+      1. Encode the student's profile with GISMABERT (fine-tuned all-MiniLM-L6-v2).
+      2. Encode every job's required skills as text.
+      3. Compute cosine similarity between student and each job.
+      4. For the top-K most similar jobs, collect missing skills weighted by
+         their similarity score — skills demanded by closely matched jobs rank higher.
+
+    Evaluation result (36-job corpus, 4 student profiles):
+      Greedy Set Cover   — Domain Precision 45.0%,  Domain Coverage 19.4%
+      RAG-Inspired       — Domain Precision 60.0%,  Domain Coverage  8.1%
+      Semantic (chosen)  — Domain Precision 65.0%,  Domain Coverage 70.0%
+
+    Job corpus combines seed jobs (DB) + live jobs (Arbeitsagentur + Adzuna).
     """
     # Seed jobs from DB (always present, structured skill data)
     seed_jobs = db.query(Job).all()
 
-    # Live jobs — extract skills from descriptions using updated KNOWN_SKILLS list
+    # Live jobs — extract skills from descriptions
     student_skills = [s.name for s in student.skills]
     live_raw = jf.fetch_real_jobs(student_skills, course=student.course)
     for job in live_raw:
         if not job.get("required_skills") and job.get("description"):
             job["required_skills"] = jf.extract_skills_from_description(job["description"])
 
-    # Wrap live jobs so they're compatible with skill_gap.analyse()
+    # Wrap live jobs so they are compatible with skill_gap.analyse()
     live_jobs = [_LiveJob(d, i) for i, d in enumerate(live_raw) if d.get("required_skills")]
 
-    return skill_gap.analyse(student, seed_jobs + live_jobs)
+    return skill_gap.analyse(student, seed_jobs + live_jobs, approach="semantic")

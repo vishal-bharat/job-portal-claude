@@ -70,6 +70,26 @@ export const api = {
   skillGap: () => request('/api/jobs/skill-gap'),
   trends: () => request('/api/jobs/trends'),
 
+  // CV skill extraction (multipart upload — no JSON Content-Type)
+  extractCV: (file) => {
+    const token = getToken();
+    const formData = new FormData();
+    formData.append('file', file);
+    return fetch(BASE_URL + '/api/skills/extract-cv', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    }).then(async res => {
+      const text = await res.text();
+      const body = text ? JSON.parse(text) : null;
+      if (!res.ok) {
+        const msg = body?.detail || body?.error || `Upload failed (${res.status})`;
+        throw new Error(msg);
+      }
+      return body;
+    });
+  },
+
   // Applications tracker
   listApplications: () => request('/api/applications'),
   saveApplication: (job) =>

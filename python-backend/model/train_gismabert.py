@@ -1,15 +1,3 @@
-# Fine-tune GISMABert on Google Colab.
-#
-# How to use:
-#   1. Go to https://colab.research.google.com
-#   2. Runtime -> Change runtime type -> T4 GPU -> Save
-#   3. Upload data/training_pairs.json via the Files panel
-#   4. Paste this file into a Colab cell and run it
-#   5. Download the 'gismabert' folder from the Files panel
-#   6. Place it at: python-backend/gismabert/
-#
-# Expected time: 20-35 minutes on free Colab T4 GPU.
-
 # Install dependencies
 # !pip install sentence-transformers -q
 
