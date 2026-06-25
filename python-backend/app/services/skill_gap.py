@@ -49,6 +49,7 @@ from ..schemas import SkillGapItem, SkillGapResponse
 # Shared GISMABERT model loader — singleton, loaded once on first use
 # ---------------------------------------------------------------------------
 
+
 _model = None
 
 
@@ -109,6 +110,67 @@ COURSE_SKILL_PROFILES: dict[str, list[str]] = {
 
 
 # ---------------------------------------------------------------------------
+# Domain-aware job pre-filter
+# ---------------------------------------------------------------------------
+
+def _infer_domain(student: Student) -> str | None:
+    """
+    Return the GISMA programme name that best matches the student's current skills.
+
+    Priority:
+      1. student.course (if set and recognised)
+      2. Highest overlap between student skills and COURSE_SKILL_PROFILES
+      3. None  (can't infer — use all jobs)
+
+    A minimum overlap of 2 is required to avoid spurious matches.
+    """
+    if student.course and student.course in COURSE_SKILL_PROFILES:
+        return student.course
+
+    student_set = {s.name.lower() for s in student.skills}
+    best_course, best_score = None, 0
+    for course, skills in COURSE_SKILL_PROFILES.items():
+        score = sum(1 for s in skills if s.lower() in student_set)
+        if score > best_score:
+            best_score, best_course = score, course
+
+    return best_course if best_score >= 2 else None
+
+
+def _domain_filter_jobs(student: Student, jobs: list) -> list:
+    """
+    Keep only jobs whose required skills overlap meaningfully with the student's
+    inferred domain profile.  This prevents cross-domain contamination — e.g.
+    a Java developer will not see 'Excel' or 'Data Analysis' recommendations
+    because Finance/Business jobs share only 'SQL' with the CS domain profile.
+
+    Overlap thresholds (tried in order):
+      ≥ 3 domain skills  →  primary filter  (usually 8–20 jobs for a 36-job corpus)
+      ≥ 2 domain skills  →  relaxed fallback if < 8 jobs pass the primary filter
+      all jobs           →  final fallback if domain cannot be inferred
+
+    Jobs from any domain always survive if no domain can be determined.
+    """
+    domain = _infer_domain(student)
+    if domain is None:
+        return jobs  # no domain signal — use all jobs
+
+    domain_skills = {s.lower() for s in COURSE_SKILL_PROFILES[domain]}
+
+    def overlap(job) -> int:
+        return sum(1 for s in job.required_skills if s.name.lower() in domain_skills)
+
+    primary   = [j for j in jobs if overlap(j) >= 3]
+    relaxed   = [j for j in jobs if overlap(j) >= 2]
+
+    if len(primary) >= 8:
+        return primary
+    if len(relaxed) >= 5:
+        return relaxed
+    return jobs  # final fallback
+
+
+# ---------------------------------------------------------------------------
 # Approach A — Greedy Set Cover (baseline)
 # ---------------------------------------------------------------------------
 
@@ -122,6 +184,7 @@ def analyse_greedy(student: Student, jobs: list) -> SkillGapResponse:
     Limitation: treats semantically related skills (e.g. PostgreSQL / MySQL)
     as completely unrelated — addressed in Approaches B and C.
     """
+    jobs = _domain_filter_jobs(student, jobs)
     student_set = {s.name.lower() for s in student.skills}
 
     skill_to_jobs: dict[str, set[int]] = defaultdict(set)
@@ -172,12 +235,14 @@ def analyse_semantic(student: Student, jobs: list) -> SkillGapResponse:
     Advantage: handles semantic proximity (MySQL ≈ PostgreSQL) that
     exact keyword matching misses.
 
-    Domain filtering: a cosine similarity threshold (0.20) is applied so that
-    only domain-relevant jobs contribute — a Computer Science student will not
-    receive suggestions like "SAP" or "Excel" from Finance/HR jobs whose
-    similarity falls below the threshold. Fallback to top-5 ensures cold-start
-    students (sparse skill profiles) still receive suggestions.
+    Domain filtering: jobs are pre-filtered to the student's inferred domain
+    (via COURSE_SKILL_PROFILES overlap) before any encoding takes place, so
+    a Java developer will not see Finance/HR jobs in the similarity pool at all.
+    A cosine similarity threshold (0.20) is applied as a secondary guard.
+    Cold-start fallback: if fewer than 5 jobs pass the threshold, top-5 by
+    raw similarity are used so sparse profiles still receive suggestions.
     """
+    jobs = _domain_filter_jobs(student, jobs)
     model = _get_model()
 
     student_text = ", ".join(s.name for s in student.skills) or "graduate student"
@@ -259,6 +324,7 @@ def analyse_rag(student: Student, jobs: list) -> SkillGapResponse:
       exact frequency analysis within that context — more focused results
       for students whose profile has a clear domain signal.
     """
+    jobs = _domain_filter_jobs(student, jobs)
     model = _get_model()
 
     query_text = ", ".join(s.name for s in student.skills) or "graduate student"
@@ -351,7 +417,8 @@ def analyse_collaborative_filtering(student: Student, jobs: list) -> SkillGapRes
 
     Particular strength: cold-start — works even when the student has
     zero skills entered, falling back to the most common skills across
-    all programme profiles.
+    all programme profiles. CF is inherently domain-aware because it
+    reasons over programme profiles, not the raw job corpus.
     """
     # Build vocabulary of all skills across all profiles
     all_skills_ordered = sorted({
