@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, getUser, setSession } from '../api/client.js';
 
-// ── Skill suggestions per course ─────────────────────────────────────────────
+// Skill suggestions per course
 const COURSE_SKILLS = {
   'Computer Science':          ['Python', 'JavaScript', 'React', 'Node.js', 'SQL', 'Git', 'Java', 'Docker', 'Machine Learning', 'TypeScript', 'Linux', 'REST APIs'],
   'Data Science & Analytics':  ['Python', 'R', 'SQL', 'Machine Learning', 'TensorFlow', 'Tableau', 'Power BI', 'Pandas', 'Statistics', 'Excel', 'Data Visualisation', 'Scikit-learn'],
@@ -30,7 +30,7 @@ const COURSES = [
   'Digital Business', 'Project Management', 'Human Resource Management',
 ];
 
-// ── Styles ────────────────────────────────────────────────────────────────────
+// Styles
 const S = {
   wrap: {
     minHeight: '100vh',
@@ -164,7 +164,7 @@ const S = {
   error: { color: '#c0392b', fontSize: 13, marginBottom: 14 },
 };
 
-// ── Component ─────────────────────────────────────────────────────────────────
+// Component
 export default function Onboarding() {
   const nav = useNavigate();
   const user = getUser();
@@ -202,7 +202,7 @@ export default function Onboarding() {
     ? form.name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase()
     : '?';
 
-  // ── Handlers ──────────────────────────────────────────────────────────────
+  // Handlers
 
   const toggleSkill = (s) => {
     setSelectedSkills(prev =>
@@ -260,7 +260,7 @@ export default function Onboarding() {
 
   const back = () => setStep(s => s - 1);
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // Render
   return (
     <div style={S.wrap}>
       <div style={S.card}>
@@ -282,7 +282,7 @@ export default function Onboarding() {
 
         {error && <div style={S.error}>{error}</div>}
 
-        {/* ── STEP 1: Profile ─────────────────────────────────────── */}
+        {/* Step 1: Profile */}
         {step === 1 && (
           <>
             <div style={S.stepLabel}>Step 1 of 3</div>
@@ -348,7 +348,7 @@ export default function Onboarding() {
           </>
         )}
 
-        {/* ── STEP 2: Skills ──────────────────────────────────────── */}
+        {/* Step 2: Skills */}
         {step === 2 && (
           <>
             <div style={S.stepLabel}>Step 2 of 3</div>
@@ -413,7 +413,7 @@ export default function Onboarding() {
           </>
         )}
 
-        {/* ── STEP 3: Preferences ─────────────────────────────────── */}
+        {/* Step 3: Preferences */}
         {step === 3 && (
           <>
             <div style={S.stepLabel}>Step 3 of 3</div>

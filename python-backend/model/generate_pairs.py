@@ -1,19 +1,12 @@
-"""
-STEP 2 — Generate training pairs for GISMABert fine-tuning.
-
-Reads data/raw_jobs.json and produces data/training_pairs.json:
-  [{"text_a": "student profile text", "text_b": "job text", "label": 0.0–1.0}, ...]
-
-Labels are assigned by keyword overlap:
-  - Same course → higher base score
-  - Skill keyword matches → boosts score
-  - Different course, no skill overlap → low score (hard negative)
-
-Produces ~3,000–8,000 pairs depending on how many jobs were collected.
-
-Run:
-    python generate_pairs.py
-"""
+# Generate training pairs for GISMABert fine-tuning.
+# Reads data/raw_jobs.json and produces data/training_pairs.json.
+#
+# Labels are assigned by keyword overlap:
+#   - Same course + skill match -> higher score
+#   - Different course, no overlap -> low score (hard negative)
+#
+# Run:
+#     python generate_pairs.py
 
 import json
 import random
@@ -22,7 +15,7 @@ import os
 
 os.makedirs("data", exist_ok=True)
 
-# ── GISMA course profiles ──────────────────────────────────────────────────────
+# GISMA course profiles
 # Each course gets: a text description + skill keywords for overlap scoring
 COURSE_PROFILES = {
     "Computer Science": {
@@ -178,7 +171,7 @@ def main():
     with open("data/raw_jobs.json", encoding="utf-8") as f:
         raw_jobs = json.load(f)
 
-    print(f"📥 Loaded {len(raw_jobs)} raw job descriptions\n")
+    print(f"Loaded {len(raw_jobs)} raw job descriptions\n")
 
     pairs = []
     random.seed(42)
@@ -188,9 +181,9 @@ def main():
         course_jobs  = [j for j in raw_jobs if j.get("course") == course]
         other_jobs   = [j for j in raw_jobs if j.get("course") != course]
 
-        print(f"📚 {course}")
+        print(f"  {course}")
 
-        # ── Positive pairs: same-course jobs ──────────────────────────────────
+        # Positive pairs
         for job in course_jobs:
             label = compute_label(course, job)
             pairs.append({
@@ -201,7 +194,7 @@ def main():
                 "type":   "positive",
             })
 
-        # ── Hard negative pairs: jobs from different courses ───────────────────
+        # Hard negative pairs
         # Sample 40% as many negatives as positives to keep balance
         n_negatives = max(int(len(course_jobs) * 0.4), 10)
         negatives   = random.sample(other_jobs, min(n_negatives, len(other_jobs)))
@@ -216,9 +209,9 @@ def main():
                 "type":   "negative",
             })
 
-        print(f"   ✅ {len(course_jobs)} positives + {len(negatives)} negatives")
+        print(f"   {len(course_jobs)} positives + {len(negatives)} negatives")
 
-    # ── Hold out 10% as evaluation set ────────────────────────────────────────
+    # Hold out 10% as evaluation set
     random.shuffle(pairs)
     split_idx = int(len(pairs) * 0.9)
     for p in pairs[split_idx:]:
@@ -235,14 +228,12 @@ def main():
     negatives   = [p for p in train_pairs if p["type"] == "negative"]
     avg_label   = sum(p["label"] for p in pairs) / len(pairs)
 
-    print(f"\n{'─'*50}")
-    print(f"✅ Generated {len(pairs)} training pairs")
-    print(f"   Train: {len(train_pairs)} | Eval: {len(eval_pairs)}")
-    print(f"   Positives: {len(positives)} | Hard negatives: {len(negatives)}")
-    print(f"   Avg label score: {avg_label:.3f}")
-    print(f"📁 Saved to: data/training_pairs.json")
-    print(f"\n{'─'*50}")
-    print("Next step: Upload data/training_pairs.json to Google Colab")
+    print(f"\nGenerated {len(pairs)} training pairs")
+    print(f"  Train: {len(train_pairs)} | Eval: {len(eval_pairs)}")
+    print(f"  Positives: {len(positives)} | Hard negatives: {len(negatives)}")
+    print(f"  Avg label score: {avg_label:.3f}")
+    print(f"  Saved to: data/training_pairs.json")
+    print("\nNext step: Upload data/training_pairs.json to Google Colab")
     print("and run train_gismabert.py  (30 mins on free T4 GPU)")
 
 

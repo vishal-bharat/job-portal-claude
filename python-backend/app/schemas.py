@@ -3,7 +3,7 @@ from datetime import date, datetime
 from typing import Optional
 
 
-# ── Auth ──────────────────────────────────────────────────────────────────────
+# Auth
 
 class SignupRequest(BaseModel):
     email: EmailStr
@@ -25,7 +25,7 @@ class AuthResponse(BaseModel):
     email: str
 
 
-# ── Profile ───────────────────────────────────────────────────────────────────
+# Profile
 
 class UpdateProfileRequest(BaseModel):
     name: Optional[str] = None
@@ -47,13 +47,13 @@ class ProfileResponse(BaseModel):
         from_attributes = True
 
 
-# ── Skills ────────────────────────────────────────────────────────────────────
+# Skills
 
 class SkillRequest(BaseModel):
     name: str
 
 
-# ── Jobs ──────────────────────────────────────────────────────────────────────
+# Jobs
 
 class SkillGapItem(BaseModel):
     """One missing skill plus how many jobs it would unlock."""
@@ -88,7 +88,7 @@ class SkillGapResponse(BaseModel):
     learning_path: list[str]           # ordered list: learn these first
 
 
-# ── Market Trends ─────────────────────────────────────────────────────────────
+# Market Trends
 
 class TrendsSkillItem(BaseModel):
     name: str
@@ -111,7 +111,7 @@ class TrendsResponse(BaseModel):
     last_updated: str
 
 
-# ── Saved Applications ────────────────────────────────────────────────────────
+# Saved Applications
 
 class SaveApplicationRequest(BaseModel):
     external_job_id: str

@@ -11,8 +11,7 @@ from ..services import job_fetcher as jf
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
 
-# ── Lightweight wrappers so live API jobs can be fed into skill_gap.analyse() ──
-# skill_gap.analyse() expects objects with .id and .required_skills (list with .name)
+# Wrappers so live API job dicts work with skill_gap.analyse()
 class _Skill:
     def __init__(self, name: str):
         self.name = name

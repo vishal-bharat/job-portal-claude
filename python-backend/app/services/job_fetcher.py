@@ -1,22 +1,5 @@
-"""
-Real job fetching for GISMA Career Connect.
-
-Sources:
-─────────
-- Bundesagentur für Arbeit API  → Official German Federal Employment Agency
-                                   No API key needed. Free. Berlin-focused.
-                                   Returns real jobs posted by German companies.
-
-- Adzuna API                    → StepStone and broader German job market
-                                   Free 200 req/day. Needs app_id + app_key.
-
-- In-memory cache               → 30-minute TTL per query
-- Graceful fallback             → returns [] if APIs fail; router uses seed jobs
-
-Adzuna keys (already set in docker-compose.yml):
-  ADZUNA_APP_ID:   your_adzuna_app_id
-  ADZUNA_APP_KEY:  your_adzuna_app_key
-"""
+# Job fetching from Bundesagentur für Arbeit and Adzuna APIs.
+# Results are cached in memory for 30 minutes.
 
 from __future__ import annotations
 import time
@@ -31,7 +14,7 @@ from ..config import settings
 
 logger = logging.getLogger(__name__)
 
-# ── In-memory cache ────────────────────────────────────────────────────────────
+# Cache
 _cache: dict[str, dict] = {}
 CACHE_TTL_SECONDS = 1800  # 30 minutes
 
@@ -47,19 +30,14 @@ def _set_cached(key: str, data: list):
     _cache[key] = {"data": data, "ts": time.time()}
 
 
-# ── Search query builder ───────────────────────────────────────────────────────
+# Query builder
 
 def build_query(student_skills: list[str], course: Optional[str]) -> str:
-    """
-    Return a single short keyword that both Arbeitsagentur and Adzuna understand.
-    Shorter = more results. "Python" beats "Python Software Developer" every time.
-    """
     PRIORITY = [
         "Python", "JavaScript", "Java", "React", "SQL", "Machine Learning",
         "Data Analysis", "TypeScript", "Node.js", "Docker", "AWS",
         "Excel", "SAP", "Tableau", "Marketing", "Finance", "Figma",
     ]
-    # Course-based fallback when no known skills match
     COURSE_FALLBACK = {
         "business": "Management", "management": "Management", "mba": "Management",
         "marketing": "Marketing", "data": "Data Analyst", "analytics": "Data Analyst",
@@ -68,7 +46,7 @@ def build_query(student_skills: list[str], course: Optional[str]) -> str:
     }
     top_skill = next((s for s in PRIORITY if s in student_skills), None)
     if top_skill:
-        return top_skill   # e.g. "Python" — clean single keyword
+        return top_skill
 
     if course:
         for kw, fallback in COURSE_FALLBACK.items():
@@ -78,7 +56,7 @@ def build_query(student_skills: list[str], course: Optional[str]) -> str:
     return student_skills[0] if student_skills else "Developer"
 
 
-# ── Bundesagentur für Arbeit (German Federal Employment Agency) ───────────────
+# Bundesagentur für Arbeit API
 
 def _fetch_arbeitsagentur(query: str, n: int = 8) -> list[dict]:
     """
@@ -161,7 +139,7 @@ def _parse_arbeitsagentur(j: dict) -> dict:
     }
 
 
-# ── Adzuna (StepStone / German market) ────────────────────────────────────────
+# Adzuna API
 
 def _fetch_adzuna(query: str, n: int = 5) -> list[dict]:
     if not settings.adzuna_app_id or not settings.adzuna_app_key:
@@ -218,29 +196,22 @@ def _parse_adzuna(j: dict) -> dict:
     }
 
 
-# ── Skill extraction from description ──────────────────────────────────────────
+# Skill extraction
 
 KNOWN_SKILLS = [
-    # ── Core programming ──────────────────────────────────────────────────────
     "Python", "JavaScript", "TypeScript", "Java", "C++", "C#", "Go", "Rust",
-    # ── Web / frontend ────────────────────────────────────────────────────────
     "React", "Vue.js", "Angular", "Node.js", "Next.js", "REST APIs", "GraphQL",
     "HTML", "CSS", "Spring Boot",
-    # ── Data & databases ──────────────────────────────────────────────────────
     "SQL", "PostgreSQL", "MongoDB", "Redis", "Elasticsearch",
     "Data Analysis", "Pandas", "NumPy", "Excel", "Tableau", "Power BI",
-    # ── ML / AI — classic ─────────────────────────────────────────────────────
     "Machine Learning", "Deep Learning", "TensorFlow", "PyTorch",
     "Scikit-learn", "Computer Vision", "NLP",
-    # ── Generative AI & LLM skills (new & fast-growing) ──────────────────────
     "LLM", "Large Language Models", "RAG", "Retrieval-Augmented Generation",
     "LangChain", "LlamaIndex", "Prompt Engineering", "Fine-tuning",
     "Agentic AI", "AI Agents", "OpenAI API", "Hugging Face",
     "Vector Database", "Embeddings", "ChatGPT", "GPT-4",
-    # ── DevOps / cloud ────────────────────────────────────────────────────────
     "Docker", "Kubernetes", "AWS", "Azure", "GCP", "CI/CD", "Git",
     "Terraform", "Linux",
-    # ── Business / management ─────────────────────────────────────────────────
     "Agile", "Scrum", "Jira", "Project Management",
     "SAP", "Finance", "Accounting", "Marketing", "SEO",
     "Figma", "UI/UX", "Power BI", "Leadership", "Communication",
@@ -248,22 +219,19 @@ KNOWN_SKILLS = [
 
 
 def extract_skills_from_description(description: str) -> list[str]:
-    """Simple keyword match to extract known skills from a job description."""
     desc_lower = description.lower()
     return [s for s in KNOWN_SKILLS if s.lower() in desc_lower][:8]
 
 
-# ── Trends: aggregate skill/role frequencies from live jobs ───────────────────
+# Market trends
 
-TRENDS_CACHE_TTL = 3600  # 1 hour — trends don't need to be real-time
+TRENDS_CACHE_TTL = 3600
 
-# Broad set of queries that give a representative Berlin market sample
 _TREND_QUERIES = [
     "Python", "Data", "Marketing", "SAP",
     "Developer", "Designer", "Finance", "Machine Learning",
 ]
 
-# Role title patterns → canonical role names shown in the UI
 _ROLE_PATTERNS: list[tuple[str, list[str]]] = [
     ("ML / AI Engineer",       ["machine learning", "ai engineer", "ml engineer", "data scientist", "künstliche intelligenz"]),
     ("Data Engineer",          ["data engineer", "data engineering"]),
@@ -335,7 +303,7 @@ def fetch_trends_data() -> dict:
     return result
 
 
-# ── Main public function ───────────────────────────────────────────────────────
+# Public interface
 
 def fetch_real_jobs(student_skills: list[str], course: Optional[str] = None) -> list[dict]:
     """
@@ -343,7 +311,7 @@ def fetch_real_jobs(student_skills: list[str], course: Optional[str] = None) -> 
       - Bundesagentur für Arbeit (official German agency, no key needed) — up to 8
       - Adzuna / StepStone (German market)                               — up to 5
 
-    Results cached 30 min. Returns [] gracefully if APIs are down.
+    Results cached 30 min.
     """
     query     = build_query(student_skills, course)
     cache_key = f"real_jobs::{query}"

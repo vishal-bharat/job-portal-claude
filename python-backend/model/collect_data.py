@@ -1,17 +1,13 @@
-"""
-STEP 1 — Collect job descriptions for GISMABert training using JobSpy.
-
-JobSpy scrapes LinkedIn, Indeed, and Glassdoor in one call.
-No API key needed. Works out of the box.
-
-Install:
-    pip install python-jobspy --break-system-packages
-
-Run from python-backend/ folder:
-    python collect_data.py
-
-Takes ~15-25 minutes. Collects ~500-1000 job descriptions.
-"""
+# Collect job descriptions for GISMABert training using JobSpy.
+# JobSpy scrapes LinkedIn and Indeed in one call. No API key needed.
+#
+# Install:
+#     pip install python-jobspy --break-system-packages
+#
+# Run from python-backend/ folder:
+#     python collect_data.py
+#
+# Takes ~15-25 minutes. Collects ~500-1000 job descriptions.
 
 import json
 import time
@@ -19,7 +15,7 @@ import os
 
 os.makedirs("data", exist_ok=True)
 
-# ── GISMA courses → search terms ──────────────────────────────────────────────
+# GISMA courses and search terms
 # One focused search term per course — short, natural job titles that
 # LinkedIn/Indeed understand well.
 COURSE_QUERIES = {
@@ -101,11 +97,11 @@ def fetch_with_jobspy(search_term: str, results: int = 30) -> list[dict]:
         return jobs
 
     except ImportError:
-        print("\n❌ JobSpy not installed.")
+        print("JobSpy not installed.")
         print("   Run: pip install python-jobspy --break-system-packages\n")
         raise
     except Exception as e:
-        print(f"  ⚠️  JobSpy error: {e}")
+        print(f"  JobSpy error: {e}")
         return []
 
 
@@ -113,10 +109,10 @@ def main():
     all_jobs  = []
     seen_ids  = set()
 
-    print("🔍 Collecting jobs via JobSpy (LinkedIn + Indeed — Germany)...\n")
+    print("Collecting jobs via JobSpy (LinkedIn + Indeed, Germany)...\n")
 
     for course, queries in COURSE_QUERIES.items():
-        print(f"📚 Course: {course}")
+        print(f"Course: {course}")
         course_count = 0
 
         for query in queries:
@@ -138,24 +134,21 @@ def main():
             # Pause between requests to avoid rate limiting
             time.sleep(4)
 
-        print(f"   ✅ {course_count} unique jobs for this course\n")
+        print(f"   {course_count} unique jobs for this course\n")
 
     # Save
     output_path = "data/raw_jobs.json"
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(all_jobs, f, ensure_ascii=False, indent=2)
 
-    print(f"{'─'*50}")
-    print(f"✅ Done! {len(all_jobs)} unique job descriptions saved.")
-    print(f"📁 Saved to: {output_path}")
+    print(f"Done: {len(all_jobs)} unique job descriptions saved to {output_path}")
 
-    print(f"\nBreakdown by course:")
+    print("\nBreakdown by course:")
     for course in COURSE_QUERIES:
         count = sum(1 for j in all_jobs if j["course"] == course)
-        bar   = "█" * (count // 5)
-        print(f"  {course:<35} {count:>4}  {bar}")
+        print(f"  {course:<35} {count:>4}")
 
-    print(f"\nNext step: python generate_pairs.py")
+    print("\nNext step: python generate_pairs.py")
 
 
 if __name__ == "__main__":
